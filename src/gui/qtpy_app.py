@@ -88,6 +88,10 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
     progress_update = QtCore.Signal(int, int, str)
     processing_complete = QtCore.Signal()
     processing_error = QtCore.Signal(str, str)
+    # Add new signals for detailed progress
+    model_loading_progress = QtCore.Signal(int)  # 0-100 percentage
+    file_detection_progress = QtCore.Signal(int)  # 0-100 percentage
+    current_file_progress = QtCore.Signal(int)  # 0-100 percentage
     
     def __init__(self):
         super().__init__()
@@ -127,6 +131,10 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
         self.progress_update.connect(self._update_progress)
         self.processing_complete.connect(self._on_processing_complete)
         self.processing_error.connect(self._show_error_dialog)
+        # Connect new progress signals
+        self.model_loading_progress.connect(self._update_model_loading_progress)
+        self.file_detection_progress.connect(self._update_file_detection_progress)
+        self.current_file_progress.connect(self._update_current_file_progress)
         
         # Configure logging to the GUI
         self._setup_logging()
@@ -340,11 +348,97 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
         progress_layout.setContentsMargins(15, 25, 15, 15)
         progress_layout.setSpacing(10)
         
+        # Add detailed progress wheels
+        detailed_progress_frame = QtWidgets.QFrame()
+        detailed_progress_layout = QtWidgets.QHBoxLayout(detailed_progress_frame)
+        detailed_progress_layout.setContentsMargins(0, 0, 0, 0)
+        detailed_progress_layout.setSpacing(15)
+        
+        # Current file progress wheel
+        self.current_file_progress = QtWidgets.QProgressBar()
+        self.current_file_progress.setRange(0, 100)
+        self.current_file_progress.setValue(0)
+        self.current_file_progress.setMaximumWidth(100)
+        self.current_file_progress.setTextVisible(True)
+        self.current_file_progress.setFormat("File: %p%")
+        # Set circular style for progress bars
+        self.current_file_progress.setStyleSheet("""
+            QProgressBar {
+                border-radius: 50px;
+                text-align: center;
+                background-color: #f5f5f5;
+            }
+            QProgressBar::chunk {
+                background-color: #0078d4;
+                border-radius: 50px;
+            }
+        """)
+        current_file_layout = QtWidgets.QVBoxLayout()
+        current_file_layout.addWidget(self.current_file_progress)
+        current_file_layout.addWidget(QtWidgets.QLabel("Current File"), alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+        detailed_progress_layout.addLayout(current_file_layout)
+        
+        # Model loading progress wheel
+        self.model_loading_progress = QtWidgets.QProgressBar()
+        self.model_loading_progress.setRange(0, 100)
+        self.model_loading_progress.setValue(0)
+        self.model_loading_progress.setMaximumWidth(100)
+        self.model_loading_progress.setTextVisible(True)
+        self.model_loading_progress.setFormat("Model: %p%")
+        self.model_loading_progress.setStyleSheet("""
+            QProgressBar {
+                border-radius: 50px;
+                text-align: center;
+                background-color: #f5f5f5;
+            }
+            QProgressBar::chunk {
+                background-color: #0078d4;
+                border-radius: 50px;
+            }
+        """)
+        model_loading_layout = QtWidgets.QVBoxLayout()
+        model_loading_layout.addWidget(self.model_loading_progress)
+        model_loading_layout.addWidget(QtWidgets.QLabel("Model Loading"), alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+        detailed_progress_layout.addLayout(model_loading_layout)
+        
+        # File detection progress wheel
+        self.file_detection_progress = QtWidgets.QProgressBar()
+        self.file_detection_progress.setRange(0, 100)
+        self.file_detection_progress.setValue(0)
+        self.file_detection_progress.setMaximumWidth(100)
+        self.file_detection_progress.setTextVisible(True)
+        self.file_detection_progress.setFormat("Files: %p%")
+        self.file_detection_progress.setStyleSheet("""
+            QProgressBar {
+                border-radius: 50px;
+                text-align: center;
+                background-color: #f5f5f5;
+            }
+            QProgressBar::chunk {
+                background-color: #0078d4;
+                border-radius: 50px;
+            }
+        """)
+        file_detection_layout = QtWidgets.QVBoxLayout()
+        file_detection_layout.addWidget(self.file_detection_progress)
+        file_detection_layout.addWidget(QtWidgets.QLabel("File Detection"), alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+        detailed_progress_layout.addLayout(file_detection_layout)
+        
+        # Add all detailed progress widgets to the progress layout
+        progress_layout.addWidget(detailed_progress_frame)
+        
+        # Add a separator line
+        separator = QtWidgets.QFrame()
+        separator.setFrameShape(QtWidgets.QFrame.Shape.HLine)
+        separator.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
+        progress_layout.addWidget(separator)
+        
         self.progress_bar = QtWidgets.QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         self.progress_bar.setMinimumHeight(20)
         self.progress_bar.setTextVisible(True)
+        self.progress_bar.setFormat("Overall: %p%")
         progress_layout.addWidget(self.progress_bar)
         
         self.status_label = QtWidgets.QLabel("Ready")
@@ -716,6 +810,9 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
     def _run_processing(self, input_dir, output_dir, model_size, language, device, output_format, skip_processed):
         """Run the transcription process in a background thread."""
         try:
+            # Signal model loading started
+            self.model_loading_progress.emit(10)
+            
             # Define a progress callback to update the UI
             def progress_callback(current, total, filename=""):
                 # Check if cancellation was requested
@@ -724,22 +821,40 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
                 
                 # Update progress
                 self.progress_update.emit(current, total, filename)
+                
+                # Update current file progress (assume equal progress for each file)
+                file_percentage = 0
+                if "Transcribing" in filename:
+                    # Update current file progress
+                    file_percentage = 50  # Start at 50% when transcribing begins
+                    self.current_file_progress.emit(file_percentage)
+                elif "Processing" in filename:
+                    # File is being processed
+                    file_percentage = 25  # Start at 25% when processing begins
+                    self.current_file_progress.emit(file_percentage)
+                
                 return True  # Continue processing
+            
+            # Signal file detection start
+            self.file_detection_progress.emit(10)
             
             # Run the main processing function
             result = process_videos(
-                input_dir=input_dir,
-                output_dir=output_dir,
+                input_path=input_dir,
+                output_path=output_dir,
                 model_size=model_size,
                 language=language,
                 device=device,
                 output_format=output_format,
-                skip_processed=skip_processed,
-                progress_callback=progress_callback
+                max_workers=1,
+                progress_callback=self._enhanced_progress_callback
             )
             
             if not self.cancel_requested:
                 # Signal processing complete
+                self.model_loading_progress.emit(100)
+                self.file_detection_progress.emit(100)
+                self.current_file_progress.emit(100)
                 self.processing_complete.emit()
                 logger.info(f"Processing complete. Processed {result.get('processed', 0)} files.")
             else:
@@ -748,6 +863,46 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
         except Exception as e:
             logger.error(f"Error in processing: {e}", exc_info=True)
             self.processing_error.emit("Processing Error", str(e))
+            
+    def _enhanced_progress_callback(self, current, total, filename=""):
+        """Enhanced progress callback to update all progress indicators."""
+        # Check if cancellation was requested
+        if self.cancel_requested:
+            return False  # Signal to stop processing
+        
+        # First, update the model loading progress at the beginning
+        if current == 1 and total > 1:
+            # Start of processing, model should be loaded
+            self.model_loading_progress.emit(100)
+            # File detection completed after the first file is found
+            self.file_detection_progress.emit(100)
+        
+        # Update the main progress
+        self.progress_update.emit(current, total, filename)
+        
+        # Extract the stage from the filename for detailed progress
+        if isinstance(filename, str):
+            # Check for specific keywords in the filename/status
+            if "loading model" in filename.lower():
+                self.model_loading_progress.emit(50)
+            elif "detecting files" in filename.lower():
+                self.file_detection_progress.emit(50)
+            elif "transcribing" in filename.lower():
+                # Increment file progress for transcription stage
+                self.current_file_progress.emit(75)
+            elif "processing" in filename.lower():
+                # Initial file processing
+                self.current_file_progress.emit(25)
+            elif "complete" in filename.lower():
+                # File completed
+                self.current_file_progress.emit(100)
+            
+            # Reset current file progress when moving to a new file
+            if current > 1 and "processing" in filename.lower():
+                # Reset for new file
+                self.current_file_progress.emit(0)
+        
+        return True  # Continue processing
     
     def _update_progress(self, current, total, filename):
         """Update progress bar and status label."""
@@ -763,6 +918,9 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
         """Handle processing complete event."""
         self.status_label.setText("Processing complete!")
         self.progress_bar.setValue(100)
+        self.model_loading_progress.setValue(100)
+        self.file_detection_progress.setValue(100)
+        self.current_file_progress.setValue(100)
         self._reset_processing_state()
     
     def _show_error_dialog(self, title, message):
@@ -789,6 +947,14 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
         self.cancel_requested = False
         self.start_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
+        
+        # Reset all progress indicators if cancellation occurred without completion
+        if not self.progress_bar.value() == 100:
+            self.progress_bar.setValue(0)
+            self.model_loading_progress.setValue(0)
+            self.file_detection_progress.setValue(0)
+            self.current_file_progress.setValue(0)
+            self.status_label.setText("Ready")
     
     def _validate_inputs(self):
         """Validate user inputs before starting processing."""
@@ -982,6 +1148,18 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
             center_point = screen_geometry.center()
             frame_geometry.moveCenter(center_point)
             self.move(frame_geometry.topLeft())
+
+    def _update_model_loading_progress(self, percentage):
+        """Update model loading progress wheel."""
+        self.model_loading_progress.setValue(percentage)
+        
+    def _update_file_detection_progress(self, percentage):
+        """Update file detection progress wheel."""
+        self.file_detection_progress.setValue(percentage)
+        
+    def _update_current_file_progress(self, percentage):
+        """Update current file progress wheel."""
+        self.current_file_progress.setValue(percentage)
 
 def main():
     """Main entry point for the Qt GUI application."""
