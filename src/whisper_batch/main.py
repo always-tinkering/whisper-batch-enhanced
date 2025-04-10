@@ -108,7 +108,9 @@ def process_videos(
     compute_type: str = "default", 
     output_format: str = "srt", 
     max_workers: int = 1,
-    language: str = "en"
+    language: str = "en",
+    skip_processed: bool = False,
+    progress_callback = None
 ) -> List[Tuple[str, bool, str]]:
     """
     Process videos in the input path and generate transcriptions.
@@ -122,6 +124,8 @@ def process_videos(
         output_format: Output format for transcriptions
         max_workers: Maximum number of concurrent workers
         language: Language code for transcription
+        skip_processed: Whether to skip already processed files
+        progress_callback: Optional callback function for progress updates
     
     Returns:
         A list of tuples containing (file_path, success, error_message)
@@ -158,18 +162,38 @@ def process_videos(
     
     logging.info(f"Found {len(video_files)} media files to process")
     
+    # Filter out already processed files if skip_processed is True
+    if skip_processed:
+        filtered_files = []
+        for video_file in video_files:
+            rel_path = video_file.relative_to(input_path) if input_path.is_dir() else video_file.name
+            output_file = output_path / rel_path.with_suffix(f".{output_format}")
+            if not output_file.exists():
+                filtered_files.append(video_file)
+            else:
+                logging.info(f"Skipping already processed file: {video_file}")
+        
+        logging.info(f"After filtering: {len(filtered_files)} files to process (skipped {len(video_files) - len(filtered_files)})")
+        video_files = filtered_files
+    
     # Process videos
     results = []
     start_time = time.time()
     
     # Function to process a single video
-    def process_single_video(video_file):
+    def process_single_video(video_file, file_index):
         try:
             rel_path = video_file.relative_to(input_path) if input_path.is_dir() else video_file.name
             output_file = output_path / rel_path.with_suffix(f".{output_format}")
             
             # Create subdirectories in output path if needed
             output_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Update progress if callback provided
+            if progress_callback:
+                if not progress_callback(file_index, len(video_files), str(video_file)):
+                    # Processing was cancelled
+                    return (str(video_file), False, "Cancelled by user")
             
             logging.info(f"Processing {video_file}")
             success = transcribe_file(
@@ -192,7 +216,8 @@ def process_videos(
     # Use ThreadPoolExecutor for concurrent processing
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         # Submit all tasks
-        future_to_file = {executor.submit(process_single_video, file): file for file in video_files}
+        future_to_file = {executor.submit(process_single_video, file, i): file 
+                          for i, file in enumerate(video_files)}
         
         # Process as they complete
         for future in as_completed(future_to_file):
@@ -224,6 +249,7 @@ def main():
     parser.add_argument("--format", help="Output format", choices=["srt", "vtt", "txt", "json", "tsv"], default="srt")
     parser.add_argument("--workers", help="Number of concurrent workers", type=int, default=1)
     parser.add_argument("--language", help="Language code", type=str, default="en")
+    parser.add_argument("--skip-processed", help="Skip already processed files", action="store_true")
     parser.add_argument("--log-level", help="Logging level", choices=["DEBUG", "INFO", "WARNING", "ERROR"], default="INFO")
     
     args = parser.parse_args()
@@ -245,7 +271,8 @@ def main():
             args.compute_type,
             args.format,
             args.workers,
-            args.language
+            args.language,
+            args.skip_processed
         )
         
         # Print summary

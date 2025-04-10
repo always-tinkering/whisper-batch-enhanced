@@ -166,7 +166,9 @@ results = process_videos(
     compute_type="default",
     output_format="srt",
     max_workers=4,
-    language="en"
+    language="en",
+    skip_processed=False,
+    progress_callback=None
 )
 
 # Check results

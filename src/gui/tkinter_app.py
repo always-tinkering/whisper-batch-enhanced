@@ -354,16 +354,14 @@ class WhisperBatchGUI(tk.Tk):
             # Call the processing function
             try:
                 process_videos(
-                    input_dir=input_dir,
-                    output_dir=output_dir,
+                    input_path=input_dir,
+                    output_path=output_dir,
                     model_size=model_size,
                     language=language,
                     device=device,
                     compute_type="default",
                     output_format=output_format,
                     skip_processed=skip_processed,
-                    beam_size=5,
-                    vad_filter=True,
                     progress_callback=progress_callback
                 )
                 
