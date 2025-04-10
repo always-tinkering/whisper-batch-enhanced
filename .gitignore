@@ -41,4 +41,7 @@ venv.bak/
 
 # OS specific files
 .DS_Store
-Thumbs.db 
+Thumbs.db
+
+# Extra Files
+-remote --heads enhanced 
