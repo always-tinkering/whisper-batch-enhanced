@@ -1,0 +1,11 @@
+# Core Backend Dependencies
+faster-whisper>=0.10.0
+ffmpeg-python>=0.2.0
+
+# Utilities
+tqdm>=4.60.0
+
+# GUI Dependencies
+# Tkinter is included in the Python standard library, 
+# but PyQt6 would be needed for Phase 2
+# PyQt6>=6.2.0  # Uncomment for Phase 2 
