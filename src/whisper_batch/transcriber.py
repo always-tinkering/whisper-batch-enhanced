@@ -278,20 +278,4 @@ def transcribe_file(model, file_path, output_file, output_format='srt', language
         return False
     except Exception as e:
         logging.error(f"Error transcribing {file_path}: {str(e)}")
-        return False
-
-if __name__ == '__main__':
-    # Example usage for testing model loading
-    print("\n--- Testing Model Loading ---")
-    print("Attempting to load a tiny model (should be quick)...")
-    # Using 'tiny.en' for faster loading during tests, 'auto' device detection
-    loaded_model = load_transcription_model(model_size="tiny.en", device="auto")
-    
-    if loaded_model:
-        print("Model loaded successfully.")
-        # Test basic model information
-        print(f"Device: {loaded_model.model.device}")
-        print(f"Compute type: {loaded_model.model.compute_type}")
-    else:
-        print("Model loading failed.")
-        print("Ensure faster-whisper is installed and has download permissions.") 
+        return False 

@@ -1,0 +1,2 @@
+[console_scripts]
+whisper-batch = whisper_batch.main:main

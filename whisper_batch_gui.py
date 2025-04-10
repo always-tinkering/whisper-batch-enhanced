@@ -2,7 +2,7 @@
 """
 Whisper Batch GUI Launcher
 
-This script launches the Whisper Batch GUI application.
+This script launches the Whisper Batch GUI application with a modern Windows 11 style UI.
 """
 
 import sys
@@ -19,7 +19,14 @@ sys.path.insert(0, str(project_root))
 try:
     # Import the enhanced logging setup and exception handler
     from src.whisper_batch import setup_logging, handle_exception
-    from src.gui.tkinter_app import main
+    
+    # Check for QtPy first, fall back to tkinter if not available
+    try:
+        from src.gui.qtpy_app import main as qtpy_main
+        USE_QT = True
+    except ImportError:
+        from src.gui.tkinter_app import main as tk_main
+        USE_QT = False
     
     # Set up global exception handling
     sys.excepthook = handle_exception
@@ -27,15 +34,20 @@ try:
     # Configure logging with file output
     log_file = setup_logging(log_to_file=True, log_level=logging.DEBUG)
     logger = logging.getLogger(__name__)
-    logger.info(f"Whisper Batch GUI starting, version 0.1.0")
+    logger.info(f"Whisper Batch GUI starting, version 0.2.0")
     logger.info(f"Python version: {sys.version}")
     logger.info(f"Running from: {project_root}")
+    logger.info(f"Using Qt GUI: {USE_QT}")
     
     if __name__ == "__main__":
         try:
-            # Launch the GUI
+            # Launch the appropriate GUI
             logger.info("Launching GUI application")
-            main()
+            if USE_QT:
+                qtpy_main()
+            else:
+                logger.warning("QtPy not found, falling back to Tkinter UI")
+                tk_main()
         except Exception as e:
             logger.critical(f"Failed to start GUI: {e}", exc_info=True)
             # Re-raise to let the global exception handler deal with it

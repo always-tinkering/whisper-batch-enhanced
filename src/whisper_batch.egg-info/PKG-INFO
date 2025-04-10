@@ -1,0 +1,38 @@
+Metadata-Version: 2.4
+Name: whisper-batch
+Version: 1.0.0
+Summary: A robust tool for batch processing and transcribing audio and video files using OpenAI's Whisper model
+Home-page: https://github.com/yourusername/whisper-batch
+Author: WhisperBatch Team
+Author-email: example@example.com
+Keywords: whisper,transcription,audio,video,batch,gpu,cuda,speech-to-text
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Topic :: Multimedia :: Sound/Audio :: Speech
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Requires-Python: >=3.8
+Requires-Dist: torch>=2.0.0
+Requires-Dist: openai-whisper>=20230918
+Requires-Dist: numpy>=1.20.0
+Requires-Dist: tqdm>=4.62.0
+Requires-Dist: pathlib>=1.0.1
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: black>=22.1.0; extra == "dev"
+Requires-Dist: flake8>=4.0.1; extra == "dev"
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: home-page
+Dynamic: keywords
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary

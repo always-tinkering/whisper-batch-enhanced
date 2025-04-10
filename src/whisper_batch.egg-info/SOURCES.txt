@@ -1,0 +1,15 @@
+README.md
+setup.py
+src/gui/__init__.py
+src/gui/tkinter_app.py
+src/whisper_batch/__init__.py
+src/whisper_batch/audio_extractor.py
+src/whisper_batch/file_handler.py
+src/whisper_batch/main.py
+src/whisper_batch/transcriber.py
+src/whisper_batch.egg-info/PKG-INFO
+src/whisper_batch.egg-info/SOURCES.txt
+src/whisper_batch.egg-info/dependency_links.txt
+src/whisper_batch.egg-info/entry_points.txt
+src/whisper_batch.egg-info/requires.txt
+src/whisper_batch.egg-info/top_level.txt
