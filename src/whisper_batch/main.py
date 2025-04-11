@@ -183,7 +183,13 @@ def process_videos(
     # Function to process a single video
     def process_single_video(video_file, file_index):
         try:
-            rel_path = video_file.relative_to(input_path) if input_path.is_dir() else video_file.name
+            # Ensure rel_path is always a Path object suitable for .with_suffix()
+            if input_path.is_dir():
+                rel_path = video_file.relative_to(input_path) 
+            else:
+                # When input is a file, rel_path is just the filename
+                rel_path = Path(video_file.name) # Ensure it's a Path object
+
             output_file = output_path / rel_path.with_suffix(f".{output_format}")
             
             # Create subdirectories in output path if needed

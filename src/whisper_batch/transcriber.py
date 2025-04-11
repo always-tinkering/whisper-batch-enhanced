@@ -127,10 +127,11 @@ def load_transcription_model(model_size="base.en", device="auto", compute_type="
     """
     try:
         # Determine the device
-        actual_device = get_device(device)
+        actual_device = get_device(device) # Reverted to original
         
         # Load the model
-        logging.info(f"Loading Whisper model: {model_size} on {actual_device} with compute type {compute_type}")
+        logging.info(f"Loading Whisper model: {model_size} on {actual_device} with compute type {compute_type}") # Reverted to original
+
         model = whisper.load_model(
             model_size,
             device=actual_device,
@@ -233,12 +234,12 @@ def transcribe_file(model, file_path, output_file, output_format='srt', language
         if output_format == 'srt':
             from whisper.utils import WriteSRT
             with open(output_file, 'w', encoding='utf-8') as f:
-                writer = WriteSRT(output_file)
+                writer = WriteSRT(output_file.parent)
                 writer.write_result(result, f)
         elif output_format == 'vtt':
             from whisper.utils import WriteVTT
             with open(output_file, 'w', encoding='utf-8') as f:
-                writer = WriteVTT(output_file)
+                writer = WriteVTT(output_file.parent)
                 writer.write_result(result)
         elif output_format == 'txt':
             with open(output_file, 'w', encoding='utf-8') as f:

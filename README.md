@@ -96,6 +96,34 @@ If CUDA errors are detected, WhisperBatch will automatically try to fall back to
   - CUDA Toolkit
   - cuDNN
 
+## How It Works
+
+WhisperBatch processes audio/video files through these steps:
+1. **File Discovery** - Recursively identifies all media files in the specified directory
+2. **Audio Extraction** - Extracts audio from video files when necessary
+3. **Parallel Processing** - Distributes transcription tasks across specified number of workers
+4. **Transcription** - Uses OpenAI's Whisper model for high-quality speech recognition
+5. **Result Generation** - Creates transcript files in your chosen format(s)
+
+## Use Cases
+
+- **Content Creators** - Generate subtitles for your videos automatically
+- **Researchers** - Transcribe interviews and recordings for analysis
+- **Media Companies** - Process large batches of media files efficiently
+- **Archivists** - Convert speech to searchable text for digital archives
+- **Language Learners** - Create study materials from audio/video content
+
+## Supporting This Project
+
+If you find WhisperBatch useful, please consider supporting its development:
+
+- ☕ [Buy me a coffee](https://buymeacoffee.com/andrewgermann)
+- ⭐ Star this repository on GitHub
+- 🐛 Report bugs and suggest features via GitHub issues
+- 🧪 Contribute code via pull requests
+
+Your support helps maintain and improve this tool with new features and better performance!
+
 ## License
 
 [MIT License](LICENSE) 
