@@ -234,7 +234,7 @@ def transcribe_file(model, file_path, output_file, output_format='srt', language
             from whisper.utils import WriteSRT
             with open(output_file, 'w', encoding='utf-8') as f:
                 writer = WriteSRT(output_file)
-                writer.write_result(result)
+                writer.write_result(result, f)
         elif output_format == 'vtt':
             from whisper.utils import WriteVTT
             with open(output_file, 'w', encoding='utf-8') as f:
