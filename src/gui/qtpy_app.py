@@ -82,6 +82,59 @@ class LoggingHandler(logging.Handler):
             QtCore.Q_ARG(str, msg)
         )
 
+class CircularProgressBar(QtWidgets.QProgressBar):
+    """Custom circular progress bar widget."""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(100, 100)
+        self.setValue(0)
+        self.setTextVisible(True)
+        self.setStyleSheet("""
+            QProgressBar {
+                border: none;
+                background-color: transparent;
+                border-radius: 50px;
+            }
+            QProgressBar::chunk {
+                background-color: transparent;
+            }
+        """)
+
+    def paintEvent(self, event):
+        # Set up painter
+        width = self.width()
+        height = self.height()
+        painter = QtGui.QPainter(self)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        
+        # Calculate progress
+        progress = self.value() / self.maximum()
+        
+        # Draw background circle
+        pen_width = 8
+        x = int(pen_width/2)
+        y = int(pen_width/2)
+        w = int(width-pen_width)
+        h = int(height-pen_width)
+        painter.setPen(QtGui.QPen(QtGui.QColor("#f0f0f0"), pen_width))
+        painter.drawArc(x, y, w, h, 0, 360*16)
+        
+        # Draw progress arc
+        if progress > 0:
+            gradient = QtGui.QConicalGradient(width/2, height/2, 270)
+            gradient.setColorAt(0, QtGui.QColor("#0078d4"))
+            gradient.setColorAt(1, QtGui.QColor("#00a2ed"))
+            painter.setPen(QtGui.QPen(QtGui.QBrush(gradient), pen_width, QtCore.Qt.PenStyle.SolidLine, QtCore.Qt.PenCapStyle.RoundCap))
+            span = int(-progress * 360 * 16)
+            painter.drawArc(x, y, w, h, 90*16, span)
+        
+        # Draw text in center
+        painter.setPen(QtGui.QColor("#202020"))
+        painter.setFont(QtGui.QFont("Segoe UI", 12, QtGui.QFont.Weight.Bold))
+        text = f"{int(progress * 100)}%"
+        painter.drawText(self.rect(), QtCore.Qt.AlignmentFlag.AlignCenter, text)
+
 class WhisperBatchQt(QtWidgets.QMainWindow):
     """Main Qt GUI Application for Whisper Batch."""
     
@@ -132,9 +185,9 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
         self.processing_complete.connect(self._on_processing_complete)
         self.processing_error.connect(self._show_error_dialog)
         # Connect new progress signals
-        self.model_loading_progress.connect(self._update_model_loading_progress)
-        self.file_detection_progress.connect(self._update_file_detection_progress)
-        self.current_file_progress.connect(self._update_current_file_progress)
+        self.model_loading_progress_bar.valueChanged.connect(self._update_model_loading_progress)
+        self.file_detection_progress_bar.valueChanged.connect(self._update_file_detection_progress)
+        self.current_file_progress_bar.valueChanged.connect(self._update_current_file_progress)
         
         # Configure logging to the GUI
         self._setup_logging()
@@ -153,6 +206,48 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
     
     def _create_ui(self):
         """Create all UI elements."""
+        # Create a horizontal splitter for main content and log
+        self.main_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
+        self.scroll_area.setWidget(self.main_splitter)
+        
+        # Create left panel for main controls
+        self.left_panel = QtWidgets.QWidget()
+        self.left_layout = QtWidgets.QVBoxLayout(self.left_panel)
+        self.left_layout.setContentsMargins(20, 20, 20, 20)
+        self.left_layout.setSpacing(20)
+        
+        # Create right panel for log
+        self.right_panel = QtWidgets.QWidget()
+        self.right_layout = QtWidgets.QVBoxLayout(self.right_panel)
+        self.right_layout.setContentsMargins(0, 20, 20, 20)
+        self.right_layout.setSpacing(20)
+        
+        # Add panels to splitter
+        self.main_splitter.addWidget(self.left_panel)
+        self.main_splitter.addWidget(self.right_panel)
+        
+        # Set initial sizes (70% main controls, 30% log)
+        self.main_splitter.setStretchFactor(0, 7)
+        self.main_splitter.setStretchFactor(1, 3)
+        
+        # Create toggle button for log
+        self.toggle_log_button = QtWidgets.QPushButton("Hide Log")
+        self.toggle_log_button.setCheckable(True)
+        self.toggle_log_button.setChecked(True)
+        self.toggle_log_button.clicked.connect(self._toggle_log_panel)
+        self.toggle_log_button.setStyleSheet("""
+            QPushButton {
+                background-color: #f0f0f0;
+                border: 1px solid #d0d0d0;
+                border-radius: 4px;
+                padding: 5px 15px;
+                font-weight: bold;
+            }
+            QPushButton:checked {
+                background-color: #e0e0e0;
+            }
+        """)
+        
         # --- Directory selection frame ---
         dir_group = QtWidgets.QGroupBox("Directories")
         dir_layout = QtWidgets.QGridLayout(dir_group)
@@ -191,7 +286,7 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
         # Set column stretch to make the text field expand
         dir_layout.setColumnStretch(1, 1)
         
-        self.main_layout.addWidget(dir_group)
+        self.left_layout.addWidget(dir_group)
         
         # --- Transcription settings frame ---
         settings_group = QtWidgets.QGroupBox("Transcription Settings")
@@ -316,7 +411,7 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
         # Set column stretch
         settings_layout.setColumnStretch(1, 1)
         
-        self.main_layout.addWidget(settings_group)
+        self.left_layout.addWidget(settings_group)
         
         # --- Controls frame ---
         control_frame = QtWidgets.QFrame()
@@ -339,8 +434,9 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
         control_layout.addSpacing(10)
         control_layout.addWidget(self.cancel_button)
         control_layout.addStretch()
+        control_layout.addWidget(self.toggle_log_button)
         
-        self.main_layout.addWidget(control_frame)
+        self.left_layout.addWidget(control_frame)
         
         # --- Progress frame ---
         progress_group = QtWidgets.QGroupBox("Progress")
@@ -355,72 +451,23 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
         detailed_progress_layout.setSpacing(15)
         
         # Current file progress wheel
-        self.current_file_progress = QtWidgets.QProgressBar()
-        self.current_file_progress.setRange(0, 100)
-        self.current_file_progress.setValue(0)
-        self.current_file_progress.setMaximumWidth(100)
-        self.current_file_progress.setTextVisible(True)
-        self.current_file_progress.setFormat("File: %p%")
-        # Set circular style for progress bars
-        self.current_file_progress.setStyleSheet("""
-            QProgressBar {
-                border-radius: 50px;
-                text-align: center;
-                background-color: #f5f5f5;
-            }
-            QProgressBar::chunk {
-                background-color: #0078d4;
-                border-radius: 50px;
-            }
-        """)
+        self.current_file_progress_bar = CircularProgressBar()
         current_file_layout = QtWidgets.QVBoxLayout()
-        current_file_layout.addWidget(self.current_file_progress)
+        current_file_layout.addWidget(self.current_file_progress_bar, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
         current_file_layout.addWidget(QtWidgets.QLabel("Current File"), alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
         detailed_progress_layout.addLayout(current_file_layout)
         
         # Model loading progress wheel
-        self.model_loading_progress = QtWidgets.QProgressBar()
-        self.model_loading_progress.setRange(0, 100)
-        self.model_loading_progress.setValue(0)
-        self.model_loading_progress.setMaximumWidth(100)
-        self.model_loading_progress.setTextVisible(True)
-        self.model_loading_progress.setFormat("Model: %p%")
-        self.model_loading_progress.setStyleSheet("""
-            QProgressBar {
-                border-radius: 50px;
-                text-align: center;
-                background-color: #f5f5f5;
-            }
-            QProgressBar::chunk {
-                background-color: #0078d4;
-                border-radius: 50px;
-            }
-        """)
+        self.model_loading_progress_bar = CircularProgressBar()
         model_loading_layout = QtWidgets.QVBoxLayout()
-        model_loading_layout.addWidget(self.model_loading_progress)
+        model_loading_layout.addWidget(self.model_loading_progress_bar, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
         model_loading_layout.addWidget(QtWidgets.QLabel("Model Loading"), alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
         detailed_progress_layout.addLayout(model_loading_layout)
         
         # File detection progress wheel
-        self.file_detection_progress = QtWidgets.QProgressBar()
-        self.file_detection_progress.setRange(0, 100)
-        self.file_detection_progress.setValue(0)
-        self.file_detection_progress.setMaximumWidth(100)
-        self.file_detection_progress.setTextVisible(True)
-        self.file_detection_progress.setFormat("Files: %p%")
-        self.file_detection_progress.setStyleSheet("""
-            QProgressBar {
-                border-radius: 50px;
-                text-align: center;
-                background-color: #f5f5f5;
-            }
-            QProgressBar::chunk {
-                background-color: #0078d4;
-                border-radius: 50px;
-            }
-        """)
+        self.file_detection_progress_bar = CircularProgressBar()
         file_detection_layout = QtWidgets.QVBoxLayout()
-        file_detection_layout.addWidget(self.file_detection_progress)
+        file_detection_layout.addWidget(self.file_detection_progress_bar, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
         file_detection_layout.addWidget(QtWidgets.QLabel("File Detection"), alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
         detailed_progress_layout.addLayout(file_detection_layout)
         
@@ -446,7 +493,7 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
         self.status_label.setStyleSheet("font-weight: bold;")
         progress_layout.addWidget(self.status_label)
         
-        self.main_layout.addWidget(progress_group)
+        self.left_layout.addWidget(progress_group)
         
         # --- Log frame ---
         log_group = QtWidgets.QGroupBox("Log")
@@ -457,7 +504,8 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
         self.log_text = LogTextEdit()
         log_layout.addWidget(self.log_text)
         
-        self.main_layout.addWidget(log_group, 1)  # Give log widget stretch priority
+        self.right_layout.addWidget(log_group)
+        self.right_layout.addStretch()
     
     def _apply_shadow_effects(self):
         """Apply shadow effects to UI elements for a modern look."""
@@ -856,7 +904,9 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
                 self.file_detection_progress.emit(100)
                 self.current_file_progress.emit(100)
                 self.processing_complete.emit()
-                logger.info(f"Processing complete. Processed {result.get('processed', 0)} files.")
+                # Count successful transcriptions from the results list
+                success_count = sum(1 for _, success, _ in result if success)
+                logger.info(f"Processing complete. Processed {len(result)} files with {success_count} successful transcriptions.")
             else:
                 logger.info("Processing was cancelled by user.")
                 
@@ -918,9 +968,9 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
         """Handle processing complete event."""
         self.status_label.setText("Processing complete!")
         self.progress_bar.setValue(100)
-        self.model_loading_progress.setValue(100)
-        self.file_detection_progress.setValue(100)
-        self.current_file_progress.setValue(100)
+        self.model_loading_progress_bar.setValue(100)
+        self.file_detection_progress_bar.setValue(100)
+        self.current_file_progress_bar.setValue(100)
         self._reset_processing_state()
     
     def _show_error_dialog(self, title, message):
@@ -930,6 +980,35 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
         dialog.setText(message)
         dialog.setIcon(QtWidgets.QMessageBox.Icon.Critical)
         dialog.setStandardButtons(QtWidgets.QMessageBox.StandardButton.Ok)
+        
+        # Apply consistent styling to the dialog
+        dialog.setStyleSheet("""
+            QMessageBox {
+                background-color: #ffffff;
+            }
+            QMessageBox QLabel {
+                color: #000000;
+                font-family: 'Segoe UI', sans-serif;
+                font-size: 10pt;
+                min-width: 300px;
+            }
+            QPushButton {
+                background-color: #0078d4;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 5px 15px;
+                font-weight: bold;
+                min-width: 60px;
+            }
+            QPushButton:hover {
+                background-color: #006cbe;
+            }
+            QPushButton:pressed {
+                background-color: #005ca3;
+            }
+        """)
+        
         dialog.exec()
     
     def _cancel_transcription(self):
@@ -951,9 +1030,9 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
         # Reset all progress indicators if cancellation occurred without completion
         if not self.progress_bar.value() == 100:
             self.progress_bar.setValue(0)
-            self.model_loading_progress.setValue(0)
-            self.file_detection_progress.setValue(0)
-            self.current_file_progress.setValue(0)
+            self.model_loading_progress_bar.setValue(0)
+            self.file_detection_progress_bar.setValue(0)
+            self.current_file_progress_bar.setValue(0)
             self.status_label.setText("Ready")
     
     def _validate_inputs(self):
@@ -988,14 +1067,44 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
         """Handle window close event."""
         if self.is_processing:
             # Ask for confirmation before closing
-            confirm = QtWidgets.QMessageBox.question(
-                self, "Confirm Exit",
-                "A transcription is in progress. Are you sure you want to quit?",
-                QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
+            confirm = QtWidgets.QMessageBox(self)
+            confirm.setWindowTitle("Confirm Exit")
+            confirm.setText("A transcription is in progress. Are you sure you want to quit?")
+            confirm.setStandardButtons(
+                QtWidgets.QMessageBox.StandardButton.Yes | 
                 QtWidgets.QMessageBox.StandardButton.No
             )
+            confirm.setDefaultButton(QtWidgets.QMessageBox.StandardButton.No)
             
-            if confirm == QtWidgets.QMessageBox.StandardButton.Yes:
+            # Apply consistent styling to the confirmation dialog
+            confirm.setStyleSheet("""
+                QMessageBox {
+                    background-color: #ffffff;
+                }
+                QMessageBox QLabel {
+                    color: #000000;
+                    font-family: 'Segoe UI', sans-serif;
+                    font-size: 10pt;
+                    min-width: 300px;
+                }
+                QPushButton {
+                    background-color: #0078d4;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 5px 15px;
+                    font-weight: bold;
+                    min-width: 60px;
+                }
+                QPushButton:hover {
+                    background-color: #006cbe;
+                }
+                QPushButton:pressed {
+                    background-color: #005ca3;
+                }
+            """)
+            
+            if confirm.exec() == QtWidgets.QMessageBox.StandardButton.Yes:
                 # Cancel processing and close
                 self.cancel_requested = True
                 event.accept()
@@ -1041,15 +1150,22 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
     
     def _check_widget_overlaps(self):
         """Check if any widgets in the layout are overlapping."""
-        if not hasattr(self, 'central_widget'):
+        if not hasattr(self, 'left_panel') or not hasattr(self, 'right_panel'):
             return
         
-        # Get all visible widgets in the main layout
+        # Get all visible widgets in the left panel layout
         widgets = []
-        for i in range(self.main_layout.count()):
-            widget = self.main_layout.itemAt(i).widget()
-            if widget and widget.isVisible():
-                widgets.append(widget)
+        for i in range(self.left_layout.count()):
+            item = self.left_layout.itemAt(i)
+            if item.widget() and item.widget().isVisible():
+                widgets.append(item.widget())
+        
+        # Add visible widgets from right panel if it's visible
+        if self.right_panel.isVisible():
+            for i in range(self.right_layout.count()):
+                item = self.right_layout.itemAt(i)
+                if item.widget() and item.widget().isVisible():
+                    widgets.append(item.widget())
         
         # Check for overlaps between widgets
         overlaps = []
@@ -1057,7 +1173,7 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
             for widget2 in widgets[i+1:]:
                 if self._widgets_overlap(widget1, widget2):
                     overlaps.append((widget1.objectName() or type(widget1).__name__, 
-                                     widget2.objectName() or type(widget2).__name__))
+                                   widget2.objectName() or type(widget2).__name__))
         
         # Log any overlaps found
         if overlaps:
@@ -1091,17 +1207,24 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
         super().resizeEvent(event)
         
         # Get content size and available window size
-        content_size = self.central_widget.sizeHint()
+        left_size = self.left_panel.sizeHint()
+        right_size = self.right_panel.sizeHint() if self.right_panel.isVisible() else QtCore.QSize(0, 0)
+        
+        # Calculate total content width and height
+        content_width = left_size.width() + (right_size.width() if self.right_panel.isVisible() else 0)
+        content_height = max(left_size.height(), right_size.height() if self.right_panel.isVisible() else 0)
+        
+        # Get available window size
         window_size = self.size()
         
         # Check if content is larger than the window
-        if content_size.height() > window_size.height() or content_size.width() > window_size.width():
+        if content_height > window_size.height() or content_width > window_size.width():
             # Enable scroll bars
             self.scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
             self.scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
             
-            if content_size.height() > window_size.height():
-                logger.debug(f"Content height ({content_size.height()}) exceeds window height ({window_size.height()}), enabling scroll bars")
+            if content_height > window_size.height():
+                logger.debug(f"Content height ({content_height}) exceeds window height ({window_size.height()}), enabling scroll bars")
         else:
             # Content fits, disable scroll bars
             self.scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -1118,12 +1241,13 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
     
     def _adjust_window_size(self):
         """Adjust the window size to fit all content optimally on startup."""
-        # Get the size hint from central widget (ideal size to show everything)
-        content_size = self.central_widget.sizeHint()
+        # Get the size hint from both panels
+        left_size = self.left_panel.sizeHint()
+        right_size = self.right_panel.sizeHint()
         
-        # Add margins for window frame
-        ideal_width = content_size.width() + 50
-        ideal_height = content_size.height() + 50
+        # Calculate ideal width (panels side by side)
+        ideal_width = left_size.width() + right_size.width() + 50  # Add margin for splitter
+        ideal_height = max(left_size.height(), right_size.height()) + 50  # Use height of taller panel
         
         # Get current screen size
         screen = QtWidgets.QApplication.primaryScreen()
@@ -1137,29 +1261,49 @@ class WhisperBatchQt(QtWidgets.QMainWindow):
         optimal_width = min(ideal_width, max_width)
         optimal_height = min(ideal_height, max_height)
         
-        # Only resize if content doesn't fit
-        current_size = self.size()
-        if optimal_width > current_size.width() or optimal_height > current_size.height():
-            logger.debug(f"Adjusting window size to {optimal_width}x{optimal_height} to fit content")
-            self.resize(optimal_width, optimal_height)
-            
-            # Center the window on screen
-            frame_geometry = self.frameGeometry()
-            center_point = screen_geometry.center()
-            frame_geometry.moveCenter(center_point)
-            self.move(frame_geometry.topLeft())
+        # Set minimum window size based on left panel
+        self.setMinimumWidth(left_size.width() + 100)  # Add margin for splitter and window frame
+        self.setMinimumHeight(min(left_size.height() + 50, max_height))
+        
+        # Resize the window
+        logger.debug(f"Adjusting window size to {optimal_width}x{optimal_height} to fit content")
+        self.resize(optimal_width, optimal_height)
+        
+        # Set initial splitter sizes (70-30 split)
+        total_width = optimal_width - 50  # Account for margins
+        self.main_splitter.setSizes([int(total_width * 0.7), int(total_width * 0.3)])
+        
+        # Center the window on screen
+        frame_geometry = self.frameGeometry()
+        center_point = screen_geometry.center()
+        frame_geometry.moveCenter(center_point)
+        self.move(frame_geometry.topLeft())
 
     def _update_model_loading_progress(self, percentage):
         """Update model loading progress wheel."""
-        self.model_loading_progress.setValue(percentage)
+        self.model_loading_progress_bar.setValue(percentage)
         
     def _update_file_detection_progress(self, percentage):
         """Update file detection progress wheel."""
-        self.file_detection_progress.setValue(percentage)
+        self.file_detection_progress_bar.setValue(percentage)
         
     def _update_current_file_progress(self, percentage):
         """Update current file progress wheel."""
-        self.current_file_progress.setValue(percentage)
+        self.current_file_progress_bar.setValue(percentage)
+
+    def _toggle_log_panel(self):
+        """Toggle the visibility of the log panel."""
+        if self.toggle_log_button.isChecked():
+            self.right_panel.show()
+            self.toggle_log_button.setText("Hide Log")
+            # Restore the previous splitter sizes
+            if hasattr(self, '_previous_splitter_sizes'):
+                self.main_splitter.setSizes(self._previous_splitter_sizes)
+        else:
+            # Store the current splitter sizes
+            self._previous_splitter_sizes = self.main_splitter.sizes()
+            self.right_panel.hide()
+            self.toggle_log_button.setText("Show Log")
 
 def main():
     """Main entry point for the Qt GUI application."""
